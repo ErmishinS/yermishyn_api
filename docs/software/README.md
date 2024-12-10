@@ -604,6 +604,431 @@ COMMIT;
 
 ```
 
-
+---
 ## RESTfull сервіс для управління даними
 
+### app.js модуль
+```js
+import express from 'express';
+import userRoutes from './routes/userRoutes.js';
+import mediaContentRoutes from './routes/mediaContentRoutes.js';
+import errorHandler from './middleware/errorHandler.js';
+
+const app = express();
+
+app.use(express.json());
+
+app.use('/api', userRoutes);
+app.use('/api', mediaContentRoutes);
+
+app.use(errorHandler);
+
+export default app;
+```
+
+### db.js (підключення до бази даних)
+```js
+import mysql from 'mysql2'
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
+}).promise()
+
+export default pool;
+```
+
+### server.js модуль
+```js
+import app from './app.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const port = process.env.PORT || 3000;
+
+const start = () => {
+    app.listen(port, () => console.log(`Server started on port ${port}`));
+};
+start();
+```
+
+### userRoutes.js (маршрути запитів для користувачів)
+```js
+import express from 'express';
+import {
+    createUser,
+    getUsers,
+    getUser,
+    updateUser,
+    deleteUser,
+} from '../controllers/userController.js';
+
+const userRouter = new express.Router();
+
+userRouter.post('/user', createUser);
+userRouter.get('/user', getUsers);
+userRouter.get('/user/:id', getUser);
+userRouter.patch('/user/:id', updateUser);
+userRouter.delete('/user/:id', deleteUser);
+
+export default userRouter;
+```
+
+### mediaContentRoutes.js (маршрути запитів для медіа контенту)
+```js
+import express from 'express';
+import {
+    createMediaContent,
+    getMediaContents,
+    getMediaContent,
+    updateMediaContent,
+    deleteMediaContent,
+} from '../controllers/mediaContentController.js';
+
+const mediaContentRouter = new express.Router();
+
+mediaContentRouter.post('/content', createMediaContent);
+mediaContentRouter.get('/content', getMediaContents);
+mediaContentRouter.get('/content/:id', getMediaContent);
+mediaContentRouter.patch('/content/:id', updateMediaContent);
+mediaContentRouter.delete('/content/:id', deleteMediaContent);
+
+export default mediaContentRouter;
+```
+
+### userController.js (контролер обробки запитів для користувачів)
+```js
+import {
+    createUser,
+    getAllUsers,
+    findUserById,
+    updateUserById,
+    deleteUserById,
+    findUserByEmail,
+} from '../models/userModel.js';
+import AppError from '../utils/appError.js';
+import handleAsync from '../utils/handleAsync.js';
+import { validateRequiredFields } from '../utils/validator.js';
+
+export const createUser = handleAsync(async (req, res) => {
+    const userData = req.body;
+
+    validateRequiredFields(userData);
+
+    const user = await findUserByEmail(userData.email);
+    if (Object.keys(user).length !== 0) {
+        throw new AppError('User has already registered', 400);
+    }
+
+    await createUser(userData);
+    res
+        .status(201)
+        .json({ status: 'success', message: 'User registered successfully' });
+});
+
+export const getUsers = handleAsync(async (req, res) => {
+    const users = await getAllUsers();
+    res.status(200).json({ status: 'success', message: users });
+});
+
+export const getUser = handleAsync(async (req, res) => {
+    const { id } = req.params;
+    const user = await findUserById(id);
+
+    if (Object.keys(user).length === 0) {
+        throw new AppError('User has not found', 404);
+    }
+
+    res.status(200).json({ status: 'success', message: user });
+});
+
+export const updateUser = handleAsync(async (req, res) => {
+    const { id } = req.params;
+    const userData = req.body;
+
+    const user = await findUserById(id);
+
+    if (Object.keys(user).length === 0) {
+        throw new AppError('User has not found', 404);
+    }
+
+    const updatedUser = await updateUserById(id, userData);
+
+    res.status(200).json({
+        status: 'success',
+        message: 'User updated successfully',
+        updatedUser,
+    });
+});
+
+export const deleteUser = handleAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const user = await findUserById(id);
+
+    if (Object.keys(user).length === 0) {
+        throw new AppError('User has not found', 404);
+    }
+
+    await deleteUserById(id);
+
+    res.status(200).json({ message: 'User deleted successfully' });
+});
+```
+
+### mediaContentController.js (контролер обробки запитів для медіа контенту)
+```js
+import handleAsync from '../utils/handleAsync.js';
+import {
+    deleteMediaContentById,
+    getAllMediaContents,
+    getMediaContentById,
+    insertMediaContent,
+    updateMediaContentById,
+} from '../models/mediaContentModel.js';
+import { validateRequiredContentFields } from '../utils/validator.js';
+import AppError from '../utils/appError.js';
+
+export const createMediaContent = handleAsync(async (req, res) => {
+    const mediaContentData = req.body;
+
+    validateRequiredContentFields(mediaContentData);
+
+    await insertMediaContent(mediaContentData);
+
+    res.status(200).json({ status: 'success', message: mediaContentData });
+});
+
+export const getMediaContents = handleAsync(async (req, res) => {
+    const mediaContents = await getAllMediaContents();
+    res.status(200).json({ status: 'success', message: mediaContents });
+});
+
+export const getMediaContent = handleAsync(async (req, res) => {
+    const { id } = req.params;
+    const mediaContent = await getMediaContentById(id);
+
+    if (Object.keys(mediaContent).length === 0) {
+        throw new AppError('Media Content has not found', 404);
+    }
+
+    res.status(200).json({ status: 'success', message: mediaContent });
+});
+
+export const updateMediaContent = handleAsync(async (req, res) => {
+    const { id } = req.params;
+    const userData = req.body;
+
+    const mediaContent = await getMediaContentById(id);
+
+    if (Object.keys(mediaContent).length === 0) {
+        throw new AppError('Media Content has not found', 404);
+    }
+
+    const updatedMediaContent = await updateMediaContentById(id, userData);
+    res.status(200).json({ status: 'success', message: updatedMediaContent });
+});
+
+export const deleteMediaContent = handleAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const deletedMediaContent = await deleteMediaContentById(id);
+
+    console.log(deletedMediaContent)
+
+    if (Object.keys(deletedMediaContent).length === 0) {
+        throw new AppError('Media Content has not found', 404);
+    }
+
+    res
+        .status(200)
+        .json({ status: 'success', message: 'Media Content Deleted Successfully' });
+});
+```
+
+### userModel.js (взаємодія з сутністю User)
+```js
+import db from '../config/db.js';
+
+export const createUser = async (userData) => {
+    const { first_name, last_name, email, password } = userData;
+    const query = `INSERT INTO User (first_name, last_name, email, password) VALUES (?, ?, ?, ?)`;
+    return db.query(query, [first_name, last_name, email, password]);
+};
+
+export const getAllUsers = async () => {
+    const query = `SELECT * FROM User`;
+    const result = await db.query(query);
+    return result[0];
+};
+
+export const findUserById = async (id) => {
+    const query = `SELECT * FROM User WHERE id = ${id}`;
+    const result = await db.query(query, [id]);
+    return result[0];
+};
+
+export const updateUserById = async (id, userData) => {
+    const fields = Object.keys(userData);
+    const values = Object.values(userData);
+
+    const setClause = fields
+        .map((field) => `${field} = ?`)
+        .join(', ');
+
+    // Обновляем пользователя
+    const updateQuery = `
+        UPDATE User
+        SET ${setClause}
+        WHERE id = ?;
+    `;
+    await db.execute(updateQuery, [...values, id]);
+
+    const selectQuery = `
+        SELECT * 
+        FROM User
+        WHERE id = ?;
+    `;
+    const [rows] = await db.execute(selectQuery, [id]);
+
+    return rows[0];
+};
+
+export const deleteUserById = async (id) => {
+    const query = `DELETE FROM User WHERE id = ${id}`;
+    await db.query(query, [id]);
+};
+
+export const findUserByEmail = async (email) => {
+    const query = `SELECT * FROM User WHERE email = '${email}'`;
+    const result = await db.query(query, [email]);
+    return result[0];
+};
+```
+
+### mediaContentModel.js (взаємодія з сутністю Media Content)
+```js
+import db from '../config/db.js';
+import AppError from '../utils/appError.js';
+
+export const insertMediaContent = async (contentData) => {
+    const { title, description, body, content_type, user_id } = contentData;
+    const query = `
+    INSERT INTO MediaContent (title, description, body, content_type, user_id)
+    VALUES (?, ?, ?, ?, ?);
+  `;
+    const result = await db.query(query, [title, description, body, content_type, user_id]);
+    return result[0];
+};
+
+export const getAllMediaContents = async () => {
+    const query = `SELECT * FROM MediaContent`;
+    const result = await db.query(query);
+    return result[0];
+};
+
+export const getMediaContentById = async (id) => {
+    const query = `SELECT * FROM MediaContent WHERE id = ${id}`;
+    const result = await db.query(query, [id]);
+    return result[0] || null;
+};
+
+export const updateMediaContentById = async (id, contentData) => {
+    const fields = Object.keys(contentData);
+    const values = Object.values(contentData);
+
+    if (!fields.length) {
+        throw new AppError('Nothing to update', 400);
+    }
+
+    const setClause = fields
+        .map((field) => `${field} = ?`)
+        .join(', ');
+
+    const updateQuery = `
+        UPDATE MediaContent
+        SET ${setClause}
+        WHERE id = ?;
+    `;
+    await db.execute(updateQuery, [...values, id]);
+
+    const selectQuery = `
+        SELECT * 
+        FROM MediaContent
+        WHERE id = ?;
+    `;
+    const [rows] = await db.execute(selectQuery, [id]);
+
+    return rows[0];
+};
+
+export const deleteMediaContentById = async (id) => {
+    const query = `DELETE FROM MediaContent WHERE id = ${id}`;
+    const result = await db.query(query, [id]);
+    return result[0] || null;
+};
+```
+
+### errorHandler.js (для обробки помилок)
+```js
+const errorHandler = (err, req, res, next) => {
+    console.error(err);
+
+    err.statusCode = err.statusCode || 500;
+    err.status = err.status || 'error';
+
+    res.status(err.statusCode).json({ status: err.status, message: err.message });
+};
+
+export default errorHandler;
+```
+
+### handleAsync.js (обгортка над функціями для перенаправлення помилок)
+```js
+const handleAsync = (fn) => {
+    return (req, res, next) => {
+        fn(req, res, next).catch(next);
+    };
+};
+
+export default handleAsync;
+```
+
+### appError.js (клас помилки)
+```js
+export default class AppError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.statusCode = statusCode;
+        this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
+
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+```
+
+### validator.js (для валідації вхідних даних)
+```js
+import AppError from './appError.js';
+
+export const validateRequiredFields = (data) => {
+    const { first_name, last_name, email, password } = data;
+    if (!first_name || !last_name || !email || !password) {
+        throw new AppError('Not enough fields for creating User', 400);
+    }
+};
+
+export const validateRequiredContentFields = (data) => {
+    const { title, body, content_type, user_id } = data;
+
+    if (!title || !body || !content_type || !user_id) {
+        throw new AppError('Not enough fields for creating Media Content', 400);
+    }
+};
+```

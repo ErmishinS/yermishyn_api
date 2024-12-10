@@ -10,7 +10,7 @@ import AppError from '../utils/appError.js';
 import handleAsync from '../utils/handleAsync.js';
 import { validateRequiredFields } from '../utils/validator.js';
 
-export const createUser = handleAsync(async (req, res) => {
+export const createNewUser = handleAsync(async (req, res) => {
     const userData = req.body;
 
     validateRequiredFields(userData);

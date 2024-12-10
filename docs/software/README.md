@@ -662,7 +662,7 @@ start();
 ```js
 import express from 'express';
 import {
-    createUser,
+    createNewUser,
     getUsers,
     getUser,
     updateUser,
@@ -671,7 +671,7 @@ import {
 
 const userRouter = new express.Router();
 
-userRouter.post('/user', createUser);
+userRouter.post('/user', createNewUser);
 userRouter.get('/user', getUsers);
 userRouter.get('/user/:id', getUser);
 userRouter.patch('/user/:id', updateUser);
@@ -716,7 +716,7 @@ import AppError from '../utils/appError.js';
 import handleAsync from '../utils/handleAsync.js';
 import { validateRequiredFields } from '../utils/validator.js';
 
-export const createUser = handleAsync(async (req, res) => {
+export const createNewUser = handleAsync(async (req, res) => {
     const userData = req.body;
 
     validateRequiredFields(userData);
